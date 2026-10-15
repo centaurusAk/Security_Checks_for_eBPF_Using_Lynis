@@ -1,0 +1,10 @@
+
+## Linux Kernel eBPF Security - Enhancement Option 1
+[REGISTER] --test-no KRNL-EBPF-0001 --os Linux --weight H --network NO --category security --description Check eBPF JIT hardening
+[LOG] Test: Checking runtime net.core.bpf_jit_harden
+[LOG] Result: net.core.bpf_jit_harden=2; JIT hardening applies to all users
+[DISPLAY] --indent 2 --text - eBPF JIT hardening --result ENABLED --color GREEN
+[REGISTER] --test-no KRNL-EBPF-0002 --os Linux --weight H --network NO --category security --description Check unprivileged eBPF restriction
+[LOG] Test: Checking runtime kernel.unprivileged_bpf_disabled
+[LOG] Result: kernel.unprivileged_bpf_disabled=1; unprivileged eBPF is disabled in strict mode
+[DISPLAY] --indent 2 --text - Unprivileged eBPF restriction --result ENABLED --color GREEN

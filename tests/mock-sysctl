@@ -1,0 +1,8 @@
+#!/bin/sh
+# Test-only sysctl replacement. Values are controlled by environment variables.
+[ "$1" = "-n" ] || exit 2
+case "$2" in
+  net.core.bpf_jit_harden) printf '%s\n' "${MOCK_BPF_JIT_HARDEN:-2}" ;;
+  kernel.unprivileged_bpf_disabled) printf '%s\n' "${MOCK_UNPRIV_BPF_DISABLED:-1}" ;;
+  *) exit 1 ;;
+esac

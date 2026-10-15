@@ -1,0 +1,76 @@
+#!/bin/sh
+
+#########################################################################
+#
+#    * DO NOT REMOVE *
+#-----------------------------------------------------
+# PLUGIN_AUTHOR=Antigravity
+# PLUGIN_CATEGORY=security
+# PLUGIN_DESC=Checks for eBPF JIT compiler hardening on Linux systems
+# PLUGIN_NAME=plugin_kernel_ebpf_harden
+# PLUGIN_REQUIRED_TESTS=
+#-----------------------------------------------------
+#
+#########################################################################
+#
+    InsertSection "Linux Kernel eBPF Security"
+#
+#################################################################################
+#
+    # Test        : KRNL-EBPF-0001
+    # Description : Check if BPF JIT compiler is hardened against JIT spraying
+    Register --test-no KRNL-EBPF-0001 --os Linux --weight H --network NO --category security --description "Check eBPF JIT hardening"
+    if [ ${SKIPTEST} -eq 0 ]; then
+        if [ ! -z "${SYSCTLBINARY}" ]; then
+            LogText "Test: Checking sysctl value of net.core.bpf_jit_harden"
+            FIND=$(${SYSCTLBINARY} net.core.bpf_jit_harden 2> /dev/null | ${AWKBINARY} '{ if ($1=="net.core.bpf_jit_harden") { print $3 } }')
+            
+            if [ -z "${FIND}" ]; then
+                LogText "Result: sysctl key net.core.bpf_jit_harden not found or not supported by this kernel"
+            else
+                if [ "${FIND}" = "2" ]; then
+                    LogText "Result: net.core.bpf_jit_harden is enabled and set to 2"
+                    Display --indent 2 --text "- eBPF JIT hardening" --result "ENABLED" --color GREEN
+                    AddScore 2
+                else
+                    LogText "Result: net.core.bpf_jit_harden is not set to 2 (current value: ${FIND})"
+                    Display --indent 2 --text "- eBPF JIT hardening" --result "WARNING" --color YELLOW
+                    ReportSuggestion "KRNL-EBPF-0001" "Enable eBPF JIT hardening by setting net.core.bpf_jit_harden=2 in sysctl"
+                fi
+            fi
+        else
+            LogText "Result: sysctl binary not found, skipping net.core.bpf_jit_harden check"
+        fi
+    fi
+#
+#################################################################################
+#
+    # Test        : KRNL-EBPF-0002
+    # Description : Check if unprivileged eBPF is disabled
+    Register --test-no KRNL-EBPF-0002 --os Linux --weight H --network NO --category security --description "Check unprivileged eBPF"
+    if [ ${SKIPTEST} -eq 0 ]; then
+        if [ ! -z "${SYSCTLBINARY}" ]; then
+            LogText "Test: Checking sysctl value of kernel.unprivileged_bpf_disabled"
+            FIND=$(${SYSCTLBINARY} kernel.unprivileged_bpf_disabled 2> /dev/null | ${AWKBINARY} '{ if ($1=="kernel.unprivileged_bpf_disabled") { print $3 } }')
+            
+            if [ -z "${FIND}" ]; then
+                LogText "Result: sysctl key kernel.unprivileged_bpf_disabled not found"
+            else
+                if [ "${FIND}" = "1" ] || [ "${FIND}" = "2" ]; then
+                    LogText "Result: unprivileged eBPF is disabled (value: ${FIND})"
+                    Display --indent 2 --text "- Unprivileged eBPF disabled" --result "ENABLED" --color GREEN
+                    AddScore 2
+                else
+                    LogText "Result: kernel.unprivileged_bpf_disabled is set to 0 (allowed)"
+                    Display --indent 2 --text "- Unprivileged eBPF disabled" --result "WARNING" --color YELLOW
+                    ReportSuggestion "KRNL-EBPF-0002" "Disable unprivileged eBPF by setting kernel.unprivileged_bpf_disabled=1 or 2"
+                fi
+            fi
+        fi
+    fi
+#
+#################################################################################
+
+WaitForKeyPress
+
+#EOF

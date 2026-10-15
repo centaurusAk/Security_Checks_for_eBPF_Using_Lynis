@@ -1,0 +1,197 @@
+#!/bin/sh
+
+#########################################################################
+#    * DO NOT REMOVE *
+#-----------------------------------------------------
+# PLUGIN_AUTHOR=Neerav Ahuja
+# PLUGIN_CATEGORY=security
+# PLUGIN_DESC=Runtime and persistent-configuration audit for Linux eBPF hardening
+# PLUGIN_NAME=kernel_ebpf_harden_enhanced_persistence
+# PLUGIN_REQUIRED_TESTS=
+#-----------------------------------------------------
+#########################################################################
+
+InsertSection "Linux Kernel eBPF Security - Enhancement Option 2"
+
+# Enhancement option 2: retain the state-aware runtime checks and add a persistence audit.
+# This detects missing or conflicting declarations and flags possible runtime/config drift.
+# It deliberately does not claim to calculate every distro-specific sysctl precedence rule.
+
+EBPF_SYSCTL=""
+if [ -n "${SYSCTLBINARY:-}" ] && [ -x "${SYSCTLBINARY}" ]; then
+    EBPF_SYSCTL="${SYSCTLBINARY}"
+else
+    EBPF_SYSCTL=$(command -v sysctl 2>/dev/null)
+fi
+
+ebpf_read_runtime() {
+    if [ -z "${EBPF_SYSCTL}" ]; then
+        return 127
+    fi
+    "${EBPF_SYSCTL}" -n "$1" 2>/dev/null
+}
+
+# Test 1: net.core.bpf_jit_harden: 0=off, 1=unprivileged users, 2=all users.
+Register --test-no KRNL-EBPF-0001 --os Linux --weight H --network NO --category security --description "Check eBPF JIT hardening"
+if [ "${SKIPTEST:-0}" -eq 0 ]; then
+    LogText "Test: Checking runtime net.core.bpf_jit_harden"
+    if [ -z "${EBPF_SYSCTL}" ]; then
+        LogText "Result: sysctl utility unavailable; runtime value cannot be assessed"
+        Display --indent 2 --text "- eBPF JIT hardening" --result "UNKNOWN" --color YELLOW
+        ReportSuggestion "KRNL-EBPF-0001" "Restore the sysctl utility or inspect /proc/sys/net/core/bpf_jit_harden manually"
+    else
+        EBPF_VALUE=$(ebpf_read_runtime net.core.bpf_jit_harden)
+        EBPF_RC=$?
+        if [ "${EBPF_RC}" -ne 0 ] || [ -z "${EBPF_VALUE}" ]; then
+            LogText "Result: net.core.bpf_jit_harden unavailable or unsupported by this kernel"
+            Display --indent 2 --text "- eBPF JIT hardening" --result "NOT SUPPORTED / UNKNOWN" --color YELLOW
+        else
+            case "${EBPF_VALUE}" in
+                0)
+                    LogText "Result: net.core.bpf_jit_harden=0; JIT hardening is disabled"
+                    Display --indent 2 --text "- eBPF JIT hardening" --result "WARNING" --color YELLOW
+                    ReportSuggestion "KRNL-EBPF-0001" "Set net.core.bpf_jit_harden=2 where compatible with workload requirements"
+                    ;;
+                1)
+                    LogText "Result: net.core.bpf_jit_harden=1; JIT hardening applies to unprivileged users"
+                    Display --indent 2 --text "- eBPF JIT hardening" --result "PARTIAL" --color YELLOW
+                    ReportSuggestion "KRNL-EBPF-0001" "Consider net.core.bpf_jit_harden=2 for hardening across all users, after compatibility testing"
+                    ;;
+                2)
+                    LogText "Result: net.core.bpf_jit_harden=2; JIT hardening applies to all users"
+                    Display --indent 2 --text "- eBPF JIT hardening" --result "ENABLED" --color GREEN
+                    ;;
+                *)
+                    LogText "Result: unexpected net.core.bpf_jit_harden value '${EBPF_VALUE}'"
+                    Display --indent 2 --text "- eBPF JIT hardening" --result "UNKNOWN" --color YELLOW
+                    ReportSuggestion "KRNL-EBPF-0001" "Review the unexpected net.core.bpf_jit_harden value against the running kernel documentation"
+                    ;;
+            esac
+        fi
+    fi
+fi
+
+# Test 2: kernel.unprivileged_bpf_disabled: 0=allowed, 1/2=disabled.
+Register --test-no KRNL-EBPF-0002 --os Linux --weight H --network NO --category security --description "Check unprivileged eBPF restriction"
+if [ "${SKIPTEST:-0}" -eq 0 ]; then
+    LogText "Test: Checking runtime kernel.unprivileged_bpf_disabled"
+    if [ -z "${EBPF_SYSCTL}" ]; then
+        LogText "Result: sysctl utility unavailable; runtime value cannot be assessed"
+        Display --indent 2 --text "- Unprivileged eBPF restriction" --result "UNKNOWN" --color YELLOW
+        ReportSuggestion "KRNL-EBPF-0002" "Restore the sysctl utility or inspect /proc/sys/kernel/unprivileged_bpf_disabled manually"
+    else
+        EBPF_VALUE=$(ebpf_read_runtime kernel.unprivileged_bpf_disabled)
+        EBPF_RC=$?
+        if [ "${EBPF_RC}" -ne 0 ] || [ -z "${EBPF_VALUE}" ]; then
+            LogText "Result: kernel.unprivileged_bpf_disabled unavailable or unsupported by this kernel"
+            Display --indent 2 --text "- Unprivileged eBPF restriction" --result "NOT SUPPORTED / UNKNOWN" --color YELLOW
+        else
+            case "${EBPF_VALUE}" in
+                0)
+                    LogText "Result: kernel.unprivileged_bpf_disabled=0; unprivileged eBPF is allowed"
+                    Display --indent 2 --text "- Unprivileged eBPF restriction" --result "WARNING" --color YELLOW
+                    ReportSuggestion "KRNL-EBPF-0002" "Set kernel.unprivileged_bpf_disabled=1 or 2 after checking application compatibility"
+                    ;;
+                1)
+                    LogText "Result: kernel.unprivileged_bpf_disabled=1; unprivileged eBPF is disabled in strict mode"
+                    Display --indent 2 --text "- Unprivileged eBPF restriction" --result "ENABLED" --color GREEN
+                    ;;
+                2)
+                    LogText "Result: kernel.unprivileged_bpf_disabled=2; unprivileged eBPF is disabled by default"
+                    Display --indent 2 --text "- Unprivileged eBPF restriction" --result "ENABLED" --color GREEN
+                    ReportSuggestion "KRNL-EBPF-0002" "Value 2 can be changed by a privileged process; consider value 1 if strict policy is required and supported"
+                    ;;
+                *)
+                    LogText "Result: unexpected kernel.unprivileged_bpf_disabled value '${EBPF_VALUE}'"
+                    Display --indent 2 --text "- Unprivileged eBPF restriction" --result "UNKNOWN" --color YELLOW
+                    ReportSuggestion "KRNL-EBPF-0002" "Review the unexpected kernel.unprivileged_bpf_disabled value against kernel documentation"
+                    ;;
+            esac
+        fi
+    fi
+fi
+
+
+# Read explicit assignments for a sysctl key from common persistent sysctl files.
+# The function reports each active declaration as value|path. It is a configuration
+# inventory, not a complete reimplementation of systemd-sysctl/sysctl precedence.
+ebpf_config_declarations() {
+    EBPF_KEY="$1"
+    for EBPF_FILE in /etc/sysctl.conf /etc/sysctl.d/*.conf /run/sysctl.d/*.conf /usr/local/lib/sysctl.d/*.conf /usr/lib/sysctl.d/*.conf /lib/sysctl.d/*.conf; do
+        [ -f "${EBPF_FILE}" ] || continue
+        awk -v key="${EBPF_KEY}" -v file="${EBPF_FILE}" '
+            {
+                line=$0
+                sub(/[[:space:]]*#.*/, "", line)
+                if (line ~ /^[[:space:]]*$/) next
+                eq=index(line, "=")
+                if (eq > 0) {
+                    lhs=substr(line, 1, eq-1)
+                    rhs=substr(line, eq+1)
+                } else {
+                    n=split(line, parts, /[[:space:]]+/)
+                    lhs=parts[1]
+                    rhs=(n >= 2 ? parts[2] : "")
+                }
+                gsub(/^[[:space:]]+/, "", lhs); gsub(/[[:space:]]+$/, "", lhs)
+                gsub(/^[[:space:]]+/, "", rhs); gsub(/[[:space:]]+$/, "", rhs)
+                split(rhs, values, /[[:space:]]+/)
+                if (lhs == key && values[1] != "") print values[1] "|" file
+            }
+        ' "${EBPF_FILE}" 2>/dev/null
+    done
+}
+
+ebpf_config_values_allowed() {
+    # Args: newline-delimited value|path records, comma-separated allowed values.
+    printf '%s\n' "$1" | awk -F '|' -v allowed="$2" '
+        BEGIN { n=split(allowed, a, ","); for (i=1; i<=n; i++) ok[a[i]]=1; count=0; bad=0 }
+        NF >= 1 && $1 != "" { count++; if (!($1 in ok)) bad=1 }
+        END { if (count == 0) exit 2; if (bad) exit 1; exit 0 }
+    '
+}
+
+# Test 3: persistent JIT-hardening policy. Value 2 is the target for all users.
+Register --test-no KRNL-EBPF-0003 --os Linux --weight H --network NO --category security --description "Check persistent eBPF JIT hardening policy"
+if [ "${SKIPTEST:-0}" -eq 0 ]; then
+    LogText "Test: Auditing persistent declarations for net.core.bpf_jit_harden"
+    EBPF_CONFIG_LINES=$(ebpf_config_declarations net.core.bpf_jit_harden)
+    if [ -z "${EBPF_CONFIG_LINES}" ]; then
+        LogText "Result: no explicit persistent declaration found for net.core.bpf_jit_harden"
+        Display --indent 2 --text "- Persistent eBPF JIT hardening" --result "NOT CONFIGURED" --color YELLOW
+        ReportSuggestion "KRNL-EBPF-0003" "Add net.core.bpf_jit_harden=2 to an appropriate sysctl configuration file and verify after reload/reboot"
+    elif ebpf_config_values_allowed "${EBPF_CONFIG_LINES}" "2"; then
+        LogText "Result: all discovered persistent declarations set net.core.bpf_jit_harden to 2"
+        Display --indent 2 --text "- Persistent eBPF JIT hardening" --result "CONFIGURED" --color GREEN
+    else
+        LogText "Result: persistent declarations for net.core.bpf_jit_harden are conflicting or weaker than value 2: ${EBPF_CONFIG_LINES}"
+        Display --indent 2 --text "- Persistent eBPF JIT hardening" --result "REVIEW" --color YELLOW
+        ReportSuggestion "KRNL-EBPF-0003" "Review all net.core.bpf_jit_harden declarations and remove conflicting or weaker values; confirm the effective value after reload"
+    fi
+fi
+
+# Test 4: persistent restriction of unprivileged eBPF. Values 1 and 2 disable it.
+Register --test-no KRNL-EBPF-0004 --os Linux --weight H --network NO --category security --description "Check persistent unprivileged eBPF policy"
+if [ "${SKIPTEST:-0}" -eq 0 ]; then
+    LogText "Test: Auditing persistent declarations for kernel.unprivileged_bpf_disabled"
+    EBPF_CONFIG_LINES=$(ebpf_config_declarations kernel.unprivileged_bpf_disabled)
+    if [ -z "${EBPF_CONFIG_LINES}" ]; then
+        LogText "Result: no explicit persistent declaration found for kernel.unprivileged_bpf_disabled"
+        Display --indent 2 --text "- Persistent unprivileged eBPF restriction" --result "NOT CONFIGURED" --color YELLOW
+        ReportSuggestion "KRNL-EBPF-0004" "Add kernel.unprivileged_bpf_disabled=1 or 2 to an appropriate sysctl configuration file and verify after reload/reboot"
+    elif ebpf_config_values_allowed "${EBPF_CONFIG_LINES}" "1,2"; then
+        LogText "Result: all discovered persistent declarations disable unprivileged eBPF"
+        Display --indent 2 --text "- Persistent unprivileged eBPF restriction" --result "CONFIGURED" --color GREEN
+    else
+        LogText "Result: persistent declarations for kernel.unprivileged_bpf_disabled include an allowed or conflicting value: ${EBPF_CONFIG_LINES}"
+        Display --indent 2 --text "- Persistent unprivileged eBPF restriction" --result "REVIEW" --color YELLOW
+        ReportSuggestion "KRNL-EBPF-0004" "Review all kernel.unprivileged_bpf_disabled declarations; remove conflicting values and verify effective policy after reload"
+    fi
+fi
+
+# Note: runtime values are assessed by KRNL-EBPF-0001/0002. These additional tests
+# assess persistence separately; a persistent declaration alone does not prove it is
+# currently effective. Confirm the live value after sysctl reload or reboot.
+
+WaitForKeyPress
+#EOF
