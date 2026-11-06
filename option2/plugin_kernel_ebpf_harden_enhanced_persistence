@@ -1,15 +1,12 @@
 #!/bin/sh
 
-#########################################################################
-#    * DO NOT REMOVE *
-#-----------------------------------------------------
+#########################################
 # PLUGIN_AUTHOR=Neerav Ahuja
-# PLUGIN_CATEGORY=security
+# PLUGIN_CATEGORY=EBF security
 # PLUGIN_DESC=Runtime and persistent-configuration audit for Linux eBPF hardening
 # PLUGIN_NAME=kernel_ebpf_harden_enhanced_persistence
 # PLUGIN_REQUIRED_TESTS=
-#-----------------------------------------------------
-#########################################################################
+########################################
 
 InsertSection "Linux Kernel eBPF Security - Enhancement Option 2"
 
