@@ -1,15 +1,11 @@
 #!/bin/sh
-
-#########################################################################
-#    * DO NOT REMOVE *
-#-----------------------------------------------------
+#############################################
 # PLUGIN_AUTHOR=Neerav Ahuja
-# PLUGIN_CATEGORY=security
-# PLUGIN_DESC=State-aware checks for Linux eBPF JIT hardening and unprivileged eBPF
+# PLUGIN_CATEGORY=EBF security
+# PLUGIN_DESC=State aware checks for Linux eBPF JIT hardening and unprivileged eBPF
 # PLUGIN_NAME=kernel_ebpf_harden_enhanced_runtime
 # PLUGIN_REQUIRED_TESTS=
-#-----------------------------------------------------
-#########################################################################
+#############################################
 
 InsertSection "Linux Kernel eBPF Security - Enhancement Option 1"
 
