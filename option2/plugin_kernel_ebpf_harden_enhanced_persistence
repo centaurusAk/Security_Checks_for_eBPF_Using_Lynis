@@ -186,9 +186,6 @@ if [ "${SKIPTEST:-0}" -eq 0 ]; then
     fi
 fi
 
-# Note: runtime values are assessed by KRNL-EBPF-0001/0002. These additional tests
-# assess persistence separately; a persistent declaration alone does not prove it is
-# currently effective. Confirm the live value after sysctl reload or reboot.
 
 WaitForKeyPress
 #EOF
